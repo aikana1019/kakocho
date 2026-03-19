@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=3.0, user-scalable=yes">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>過去帳 - 一日一頁</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@300;400;500;700;900&family=BIZ+UDMincho&display=swap');
@@ -230,24 +230,8 @@ html, body {
 <div class="overlay hidden" id="settings-modal">
   <div class="modal-box">
     <h3>設定</h3><br>
-    <div class="form-row">
-      <label>家名（表紙・ファイル名に使用）</label>
-      <input type="text" id="st-family" placeholder="例：山田、鈴木">
-    </div>
-    <br>
-    <div class="form-row">
-      <label>中央のお題目・宗派名</label>
-      <input type="text" id="st-daimoku" style="font-size:0.95rem;" placeholder="例：南無妙法蓮華経">
-      <p style="font-size:0.65rem;color:#888;margin-top:5px;">
-        宗派に合わせて変更できます<br>
-        日蓮宗・創価学会：南無妙法蓮華経<br>
-        浄土宗・浄土真宗：南無阿弥陀仏<br>
-        真言宗：南無大師遍照金剛<br>
-        禅宗（曹洞・臨済）：南無釈迦牟尼仏<br>
-        天台宗：南無妙法蓮華経 または 南無阿弥陀仏
-      </p>
-    </div>
-    <button class="ctrl-btn" style="width:100%; background:#8a7040;" onclick="saveSettings()">保存する</button>
+    <div class="form-row"><label>家名</label><input type="text" id="st-family"></div>
+    <button class="ctrl-btn" style="width:100%; background:#8a7040;" onclick="saveSettings()">家名を保存</button>
     <br><hr><br>
     <h4>CSVデータ連携</h4><br>
     <button class="ctrl-btn" style="width:100%; background:#333;" onclick="exportCSV()">CSVファイルを保存</button>
@@ -309,7 +293,7 @@ let events = {
   '10-13': ['御会式'], 
   '11-18': ['創価学会創立記念日'] 
 };
-let settings = { familyName: '○○', daimoku: '南無妙法蓮華経' };
+let settings = { familyName: '○○' };
 let bgDataUrl = '';
 let currentMonth = new Date().getMonth() + 1;
 let currentDay = new Date().getDate();
@@ -368,7 +352,7 @@ async function load() {
     const p = JSON.parse(data);
     entries  = p.entries  || {};
     events   = p.events   || events;
-    settings = Object.assign({ familyName: '○○', daimoku: '南無妙法蓮華経' }, p.settings || {});
+    settings = p.settings || { familyName: '○○' };
   }
   // IndexedDBから背景を読み込む
   try {
@@ -379,8 +363,6 @@ async function load() {
   applyBg(bgDataUrl);
   document.getElementById('cover-family-name').textContent = settings.familyName + '家';
   document.getElementById('st-family').value = settings.familyName;
-  document.getElementById('spine-text').textContent = settings.daimoku || '南無妙法蓮華経';
-  if(document.getElementById('st-daimoku')) document.getElementById('st-daimoku').value = settings.daimoku || '南無妙法蓮華経';
   render();
 }
 
@@ -702,23 +684,15 @@ async function clearBg() {
   save();
   showToast('背景を削除しました');
 }
-function saveSettings() {
-  settings.familyName = (document.getElementById('st-family').value || '').trim() || '○○';
-  settings.daimoku    = (document.getElementById('st-daimoku').value || '').trim() || '南無妙法蓮華経';
-  document.getElementById('spine-text').textContent = settings.daimoku;
-  document.getElementById('cover-family-name').textContent = settings.familyName + '家';
-  save();
-  closeModal('settings-modal');
-  showToast('設定を保存しました');
-}
-
-// キーボード操作（矢印キー＋テンキー(4=左,6=右)）
+function saveSettings() { settings.familyName = document.getElementById('st-family').value; save(); // キーボード操作（矢印キー＋テンキー(4=左,6=右)）
 document.addEventListener('keydown', e => {
   const tag = document.activeElement.tagName;
   if (tag === 'INPUT' || tag === 'TEXTAREA') return;
   if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp'   || e.key === '4') changeDay(-1);
   if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === '6') changeDay(1);
 });
+
+load(); closeModal('settings-modal'); showToast("保存しました"); }
 
 function removeDuplicates() {
   let removed = 0;
@@ -847,30 +821,6 @@ async function applyColorPreset(idx) {
 function openSettingsModal() { document.getElementById('settings-modal').classList.remove('hidden'); }
 function showToast(m) { const t=document.getElementById('toast'); t.textContent=m; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2000); }
 
-// キーボード操作（矢印キー＋テンキー(4=左,6=右)）
-document.addEventListener('keydown', e => {
-  const tag = document.activeElement.tagName;
-  if (tag === 'INPUT' || tag === 'TEXTAREA') return;
-  if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp'   || e.key === '4') changeDay(-1);
-  if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === '6') changeDay(1);
-});
-
-// タッチスワイプでページ移動（スマホ・タブレット対応）
-(function() {
-  let tx = 0, ty = 0;
-  const book = document.getElementById('page-book');
-  book.addEventListener('touchstart', e => {
-    tx = e.touches[0].clientX;
-    ty = e.touches[0].clientY;
-  }, { passive: true });
-  book.addEventListener('touchend', e => {
-    const dx = e.changedTouches[0].clientX - tx;
-    const dy = e.changedTouches[0].clientY - ty;
-    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 45) {
-      dx < 0 ? changeDay(1) : changeDay(-1);
-    }
-  }, { passive: true });
-})();
 
 load();
 </script>
