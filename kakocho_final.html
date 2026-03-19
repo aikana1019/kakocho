@@ -1,0 +1,878 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=3.0, user-scalable=yes">
+<title>過去帳 - 一日一頁</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@300;400;500;700;900&family=BIZ+UDMincho&display=swap');
+
+:root {
+  --paper: #f7f0e3;
+  --ink: #111108;
+  --border: #1a1710;
+  --red: #8b1a1a;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body {
+  width: 100%; height: 100%; overflow: hidden;
+  font-family: 'Noto Serif JP', serif; background: #1a1208;
+}
+
+/* 背景写真 */
+#bg-layer {
+  position: fixed; inset: 0; z-index: 0;
+  background-size: cover; background-position: center;
+}
+#bg-layer::after { content: ''; position: absolute; inset: 0; background: rgba(0,0,0,0.3); }
+
+#app {
+  position: fixed; inset: 0; z-index: 1;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 10px;
+}
+
+#date-header {
+  display: flex; align-items: center; justify-content: center; gap: 16px; color: #f7f0e3; margin-bottom: 8px;
+}
+#current-date-display {
+  font-size: clamp(1.6rem, 4vw, 2.6rem); letter-spacing: 0.25em; font-weight: 700;
+  display: flex; align-items: center; gap: 10px;
+}
+.date-badge {
+  font-size: clamp(0.55rem, 1.2vw, 0.82rem); font-weight: 700; padding: 2px 8px;
+  border-radius: 3px; letter-spacing: 0.08em; white-space: nowrap;
+}
+.date-badge.kiki { background: linear-gradient(135deg,#8b1a1a,#b02020); color:#fff; }
+.date-badge.monthly { background: rgba(120,90,30,0.25); color:#f5e0b0; border:1px solid rgba(200,160,60,0.4); }
+
+/* 本の本体 */
+#page-book {
+  background: var(--paper); border: 2px solid var(--border);
+  box-shadow: 0 15px 40px rgba(0,0,0,0.6);
+  position: relative; width: 100%; max-width: 1000px;
+  aspect-ratio: 1.4 / 1; overflow: hidden;
+}
+
+/* 中央の題目 */
+#spine {
+  position: absolute; left: 50%; top: 0; bottom: 0;
+  width: 60px; transform: translateX(-50%); z-index: 20;
+  background: #ffffff; box-shadow: 0 0 15px rgba(0,0,0,0.2);
+  border-left: 1px solid #bbb; border-right: 1px solid #bbb;
+  display: flex; align-items: center; justify-content: center;
+}
+#spine-text {
+  writing-mode: vertical-rl; font-family: 'BIZ UDMincho', serif;
+  font-size: clamp(1rem, 3vw, 2.2rem); letter-spacing: 0.2em;
+}
+
+#pages-container { display: flex; width: 100%; height: 100%; }
+.page-side { flex: 1; display: flex; flex-direction: column; position: relative; }
+
+/* 記念日・行事エリア（上部） */
+.memorial-area {
+  height: 28%; border-bottom: 2px solid var(--border);
+  display: flex; flex-direction: row-reverse; padding: 6px 50px 6px 10px;
+  overflow: hidden; gap: 0;
+}
+/* 行事（固定記念日） */
+.memorial-item {
+  writing-mode: vertical-rl; font-size: clamp(0.75rem, 1.6vw, 1.15rem);
+  color: var(--red); font-weight: 700; padding: 4px 6px; cursor: pointer;
+  flex-shrink: 0;
+}
+/* 上部は行事専用 */
+
+/* 記録エリア（縦罫線） */
+.entries-area {
+  flex: 1; display: flex; flex-direction: row-reverse; padding: 0 45px;
+}
+.entry-col {
+  flex: 1; border-right: 1px solid rgba(0,0,0,0.15);
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: flex-start;  /* 上から順に配置、下ブロックはmargin-top:autoで下寄せ */
+  writing-mode: vertical-rl; cursor: pointer; padding: 8px 4px;
+  overflow: hidden;
+}
+.entry-col:first-child { border-right: none; }
+.entry-col:hover { background: rgba(139,26,26,0.05); }
+/* 上ブロック（ラベル＋名前） */
+.col-top { display: flex; flex-direction: column; align-items: center; flex-shrink: 0; }
+/* 下ブロック（享年・続柄・備考）：列の下側に縦書きで表示 */
+.col-bottom {
+  display: flex; flex-direction: column; align-items: center;
+  border-top: 1px solid rgba(0,0,0,0.15);
+  padding-top: 4px; margin-top: auto;
+  width: 100%; flex-shrink: 0;
+}
+
+.col-label {
+  font-size: clamp(0.36rem, 0.72vw, 0.52rem); border: 1px solid;
+  padding: 1px 4px; margin-bottom: 5px; border-radius: 2px; letter-spacing: 0.05em; white-space: nowrap;
+}
+.col-label.shotsuki { color: var(--red); border-color: var(--red); }
+.col-label.monthly  { color: #7a6030; border-color: #7a6030; }
+/* 戒名・俗名メイン（上部に大きく） */
+.col-kaimyo { font-size: clamp(0.95rem, 2.1vw, 1.6rem); font-weight: 700; letter-spacing: 0.1em; }
+.col-kaimyo.is-kaimyo { color: var(--red); }
+/* 俗名サブ（戒名がある場合） */
+.col-sub  { font-size: clamp(0.55rem, 1.05vw, 0.8rem); color: #333; margin-top: 3px; }
+/* 享年・続柄（下ブロック） */
+.col-age  { font-size: clamp(0.55rem, 1.1vw, 0.85rem); color: var(--ink); margin-bottom: 2px; }
+/* 備考（下ブロック） */
+.col-note {
+  font-size: clamp(0.5rem, 1.0vw, 0.75rem); color: #444;
+  display: flex; flex-direction: column; align-items: center; gap: 2px; margin-top: 2px;
+}
+
+/* 操作パネル */
+#controls { display: flex; gap: 8px; margin-top: 15px; flex-wrap: wrap; justify-content: center; }
+.ctrl-btn {
+  background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.3);
+  color: white; padding: 6px 14px; border-radius: 20px; cursor: pointer; font-size: 0.8rem;
+}
+#jump-panel { display: flex; align-items: center; gap: 4px; background: rgba(0,0,0,0.3); padding: 4px 10px; border-radius: 20px; }
+#jump-panel input { width: 40px; background: transparent; border: 1px solid #666; color: #fff; text-align: center; }
+
+/* モーダル */
+.overlay { position: fixed; inset: 0; z-index: 100; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; padding: 10px; }
+.hidden { display: none !important; }
+.modal-box { background: var(--paper); width: 100%; max-width: 480px; max-height: 90vh; overflow-y: auto; padding: 20px; border-radius: 4px; }
+.form-row { display: flex; flex-direction: column; margin-bottom: 12px; }
+.form-row label { font-size: 0.8rem; font-weight: bold; margin-bottom: 4px; }
+.form-row input, .form-row textarea { padding: 10px; border: 1px solid #ccc; font-family: inherit; }
+
+/* 表紙 */
+#cover-screen { position: fixed; inset: 0; z-index: 200; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; backdrop-filter: blur(5px); }
+#cover-book { background: #f2e8d0; width: 280px; aspect-ratio: 0.7; border: 4px solid #8a7040; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+
+#toast { position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%); background: #000; color: #fff; padding: 8px 20px; border-radius: 20px; opacity: 0; transition: 0.3s; z-index: 1000; pointer-events: none; }
+#toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+<div id="bg-layer"></div>
+
+<div id="cover-screen">
+  <div id="cover-book" onclick="closeCover()">
+    <h1 id="cover-family-name" style="writing-mode:vertical-rl; font-size:2.5rem;">○○家</h1>
+    <p style="writing-mode:vertical-rl; letter-spacing:0.5em; margin-top:10px;">過去帳</p>
+    <p style="position:absolute; bottom:20px; font-size:0.8rem;">タップして開く</p>
+  </div>
+</div>
+
+<div id="app">
+  <div id="date-header">
+    <button class="ctrl-btn" onclick="changeDay(-1)">◀</button>
+    <div id="current-date-display">―</div>
+    <button class="ctrl-btn" onclick="changeDay(1)">▶</button>
+  </div>
+
+  <div id="page-book">
+    <div id="pages-container">
+      <div class="page-side">
+        <div class="memorial-area" id="memorial-list-right"></div>
+        <div class="entries-area" id="entry-list-right"></div>
+      </div>
+      <div class="page-side">
+        <div class="memorial-area" id="memorial-list-left"></div>
+        <div class="entries-area" id="entry-list-left"></div>
+      </div>
+    </div>
+    <div id="spine"><div id="spine-text">南無妙法蓮華経</div></div>
+  </div>
+
+  <div id="controls">
+    <div id="jump-panel">
+      <input type="number" id="jump-month" placeholder="月">
+      <input type="number" id="jump-day" placeholder="日">
+      <button class="ctrl-btn" onclick="jumpToDate()">移動</button>
+    </div>
+    <button class="ctrl-btn" onclick="openAddModal()">＋ 記録</button>
+    <button class="ctrl-btn" onclick="openEventModal()">🔔 行事</button>
+    <button class="ctrl-btn" onclick="openListModal()">📖 一覧</button>
+    <button class="ctrl-btn" onclick="openBgPanel()">🖼 背景</button>
+    <button class="ctrl-btn" onclick="openSettingsModal()">⚙ 設定</button>
+    <button class="ctrl-btn" onclick="showCover()">📕 表紙</button>
+  </div>
+</div>
+
+<div class="overlay hidden" id="entry-modal">
+  <div class="modal-box">
+    <h3 id="modal-title">記録の編集</h3><br>
+    <input type="hidden" id="em-id">
+    <div class="form-row"><label>御仏名（戒名）</label><input type="text" id="em-kaimyo" style="color:red; font-weight:bold;"></div>
+    <div class="form-row"><label>俗名</label><input type="text" id="em-zokumy"></div>
+    <div class="form-row"><label>享年・続柄</label><input type="text" id="em-age"></div>
+    <div class="form-row"><label>没年</label><input type="text" id="em-deathyear"></div>
+    <div class="form-row"><label>備考</label><textarea id="em-note"></textarea></div>
+    <div style="display:flex; gap:10px;">
+      <button class="ctrl-btn" style="background:var(--red); flex:1;" onclick="saveEntry()">保存</button>
+      <button class="ctrl-btn" id="del-btn" style="background:#666;" onclick="deleteEntry()">削除</button>
+      <button class="ctrl-btn" style="color:black;" onclick="closeModal('entry-modal')">閉じる</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay hidden" id="event-modal">
+  <div class="modal-box">
+    <h3>本日の行事・記念日</h3><br>
+    <div id="event-edit-list"></div>
+    <hr><br>
+    <div class="form-row"><label>新しく行事・記念日を追加</label><input type="text" id="new-event-name" placeholder="例：創価学会創立記念日"></div>
+    <button class="ctrl-btn" style="width:100%; background:var(--red);" onclick="addEvent()">行事を追加</button>
+    <br><br>
+    <button class="ctrl-btn" style="color:black; width:100%;" onclick="closeModal('event-modal')">閉じる</button>
+  </div>
+</div>
+
+<div class="overlay hidden" id="settings-modal">
+  <div class="modal-box">
+    <h3>設定</h3><br>
+    <div class="form-row">
+      <label>家名（表紙・ファイル名に使用）</label>
+      <input type="text" id="st-family" placeholder="例：山田、鈴木">
+    </div>
+    <br>
+    <div class="form-row">
+      <label>中央のお題目・宗派名</label>
+      <input type="text" id="st-daimoku" style="font-size:0.95rem;" placeholder="例：南無妙法蓮華経">
+      <p style="font-size:0.65rem;color:#888;margin-top:5px;">
+        宗派に合わせて変更できます<br>
+        日蓮宗・創価学会：南無妙法蓮華経<br>
+        浄土宗・浄土真宗：南無阿弥陀仏<br>
+        真言宗：南無大師遍照金剛<br>
+        禅宗（曹洞・臨済）：南無釈迦牟尼仏<br>
+        天台宗：南無妙法蓮華経 または 南無阿弥陀仏
+      </p>
+    </div>
+    <button class="ctrl-btn" style="width:100%; background:#8a7040;" onclick="saveSettings()">保存する</button>
+    <br><hr><br>
+    <h4>CSVデータ連携</h4><br>
+    <button class="ctrl-btn" style="width:100%; background:#333;" onclick="exportCSV()">CSVファイルを保存</button>
+    <br><br>
+    <button class="ctrl-btn" style="width:100%; background:#8b1a1a;" onclick="removeDuplicates()">重複データを削除</button>
+    <p style="font-size:0.65rem; color:#666; margin-top:6px;">同じ日付・同じ戒名（俗名）の重複を一括削除します</p>
+    <p style="font-size:0.7rem; margin-top:10px;">CSVから読み込み：</p>
+    <input type="file" accept=".csv" onchange="importCSV(event)">
+    <br><br>
+    <button class="ctrl-btn" style="color:black; width:100%;" onclick="closeModal('settings-modal')">閉じる</button>
+  </div>
+</div>
+
+<div class="overlay hidden" id="list-modal">
+  <div class="modal-box">
+    <h3>記録一覧</h3><br>
+    <div id="list-container"></div>
+    <br><button class="ctrl-btn" style="color:black; width:100%;" onclick="closeModal('list-modal')">閉じる</button>
+  </div>
+</div>
+
+<div class="overlay hidden" id="bg-panel">
+  <div class="modal-box" style="max-width:340px">
+    <h3>背景設定</h3>
+    <p style="font-size:0.72rem;color:#666;margin:8px 0 14px;">設定した背景は次回起動時も保持されます</p>
+
+    <!-- 現在の背景プレビュー -->
+    <div id="bg-preview-wrap" style="margin-bottom:14px;text-align:center;">
+      <div id="bg-preview" style="
+        width:100%; aspect-ratio:16/9; border:1px solid #ccc; border-radius:4px;
+        background-size:cover; background-position:center;
+        background-color:#e8dcc8; display:flex; align-items:center; justify-content:center;
+        font-size:0.75rem; color:#888; font-family:serif;">
+        背景なし
+      </div>
+    </div>
+
+    <!-- カラープリセット -->
+    <p style="font-size:0.7rem;color:#666;margin-bottom:6px;">カラープリセット</p>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:14px;" id="color-presets"></div>
+
+    <!-- 画像アップロード -->
+    <input type="file" id="bg-input" accept="image/*" style="display:none" onchange="handleBgUpload(event)">
+    <button class="ctrl-btn" style="width:100%;background:#4a3818;color:#f7f0e3;" onclick="document.getElementById('bg-input').click()">🖼 写真を選ぶ</button>
+    <button class="ctrl-btn" style="width:100%;margin-top:8px;background:#333;color:#f7f0e3;" onclick="clearBg()">✕ 背景を消す</button>
+    <br><br>
+    <button class="ctrl-btn" style="color:black; width:100%;" onclick="closeModal('bg-panel')">閉じる</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const STORAGE_KEY = 'kakocho_one_day_final_v1';
+let entries = {}; 
+let events = { 
+  '2-16': ['日蓮大聖人御降誕'], 
+  '4-28': ['立教開宗会'], 
+  '10-13': ['御会式'], 
+  '11-18': ['創価学会創立記念日'] 
+};
+let settings = { familyName: '○○', daimoku: '南無妙法蓮華経' };
+let bgDataUrl = '';
+let currentMonth = new Date().getMonth() + 1;
+let currentDay = new Date().getDate();
+
+// 和暦変換
+const WAREKI = [
+  {name:'令和',start:2019},{name:'平成',start:1989},
+  {name:'昭和',start:1926},{name:'大正',start:1912},{name:'明治',start:1868}
+];
+function parseDeathYear(str) {
+  if (!str || !str.trim()) return null;
+  str = str.trim();
+  if (/^\d{4}$/.test(str)) return parseInt(str);
+  for (const w of WAREKI) {
+    const m = str.match(new RegExp('^'+w.name+'(\\d{1,2})年?$'));
+    if (m) return w.start + parseInt(m[1]) - 1;
+  }
+  return null;
+}
+const KIKI = [
+  {y:1,n:'一周忌'},{y:2,n:'三回忌'},{y:6,n:'七回忌'},
+  {y:12,n:'十三回忌'},{y:16,n:'十七回忌'},{y:22,n:'二十三回忌'},
+  {y:26,n:'二十七回忌'},{y:32,n:'三十三回忌'},{y:36,n:'三十七回忌'},
+  {y:49,n:'五十回忌'},{y:99,n:'百回忌'}
+];
+function calcKiki(deathYear) {
+  if (!deathYear) return null;
+  const dy = parseDeathYear(deathYear);
+  if (!dy) return null;
+  const diff = new Date().getFullYear() - dy;
+  if (diff <= 0) return null;
+  const hit = KIKI.find(k => k.y === diff);
+  return hit ? hit.n : null;
+}
+
+// 漢数字変換
+function arabicToKanji(str) {
+  if (!str) return '';
+  const digits = ['〇','一','二','三','四','五','六','七','八','九'];
+  return str.toString().replace(/\d+/g, m => {
+    let n = parseInt(m, 10);
+    if (n === 0) return digits[0];
+    let res = '';
+    if (n >= 1000) { let k=Math.floor(n/1000); res+=(k===1?'':digits[k])+'千'; n%=1000; }
+    if (n >= 100)  { let h=Math.floor(n/100);  res+=(h===1?'':digits[h])+'百'; n%=100; }
+    if (n >= 10)   { let t=Math.floor(n/10);   res+=(t===1?'':digits[t])+'十'; n%=10; }
+    if (n > 0) res += digits[n];
+    return res;
+  });
+}
+
+async function load() {
+  // localStorageからエントリ・設定を読み込む
+  const data = localStorage.getItem(STORAGE_KEY);
+  if (data) {
+    const p = JSON.parse(data);
+    entries  = p.entries  || {};
+    events   = p.events   || events;
+    settings = Object.assign({ familyName: '○○', daimoku: '南無妙法蓮華経' }, p.settings || {});
+  }
+  // IndexedDBから背景を読み込む
+  try {
+    bgDataUrl = await loadBgFromDB();
+  } catch(e) {
+    bgDataUrl = '';
+  }
+  applyBg(bgDataUrl);
+  document.getElementById('cover-family-name').textContent = settings.familyName + '家';
+  document.getElementById('st-family').value = settings.familyName;
+  document.getElementById('spine-text').textContent = settings.daimoku || '南無妙法蓮華経';
+  if(document.getElementById('st-daimoku')) document.getElementById('st-daimoku').value = settings.daimoku || '南無妙法蓮華経';
+  render();
+}
+
+function save() {
+  // 背景はIndexedDBで管理するのでlocalStorageには含めない
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ entries, events, settings }));
+  } catch(e) {
+    console.warn('localStorage保存失敗:', e);
+  }
+}
+
+function render() {
+  const key = `${currentMonth}-${currentDay}`;
+  const dayEntries = entries[key] || [];
+  const dayEvents  = events[key]  || [];
+
+  // 月命日スキャン（命日の日が一致、月が異なる）
+  const monthly = [];
+  Object.keys(entries).forEach(k => {
+    if (k === key) return;
+    const [m, d] = k.split('-').map(Number);
+    if (d === currentDay) {
+      entries[k].forEach(e => monthly.push({...e, isMonthly:true, origMonth:m}));
+    }
+  });
+
+  // 祥月命日の回忌を計算
+  const shotsukiRecs = dayEntries.map(e => ({
+    ...e, isMonthly:false,
+    kikiName: calcKiki(e.deathYear)
+  }));
+
+  // 日付ヘッダー：太字・日付のみ（月名なし）＋回忌バッジ
+  const hasAnniv   = shotsukiRecs.length > 0;
+  const hasMonthly = monthly.length > 0;
+  let kikiLabel = '';
+  if (hasAnniv) {
+    const k = shotsukiRecs.find(r => r.kikiName);
+    kikiLabel = k ? k.kikiName : '祥月命日';
+  }
+  const kanjiDate = arabicToKanji(currentMonth) + '月' + arabicToKanji(currentDay) + '日';
+  let headerHTML = '<span>' + kanjiDate + '</span>';
+  if (hasAnniv)   headerHTML += `<span class="date-badge kiki">${kikiLabel}</span>`;
+  if (hasMonthly) headerHTML += `<span class="date-badge monthly">月命日</span>`;
+  document.getElementById('current-date-display').innerHTML = headerHTML;
+
+  // ===== 上部エリア：行事のみ =====
+  const drawTopArea = (areaId) => {
+    const el = document.getElementById(areaId);
+    el.innerHTML = '';
+    if (dayEvents.length === 0) {
+      // 行事なしの日は薄く「記念日なし」
+      el.innerHTML = '<div style="writing-mode:vertical-rl;opacity:0.2;font-size:0.7rem;padding:8px;">行事なし</div>';
+      return;
+    }
+    dayEvents.forEach(ev => {
+      const d = document.createElement('div');
+      d.className = 'memorial-item';
+      d.onclick = openEventModal;
+      d.textContent = ev;
+      el.appendChild(d);
+    });
+  };
+  drawTopArea('memorial-list-right');
+  drawTopArea('memorial-list-left');
+
+  // ===== 下部エリア（縦罫線・全記録）=====
+  const allRecords = [...shotsukiRecs, ...monthly];
+  const rightArea = document.getElementById('entry-list-right');
+  const leftArea  = document.getElementById('entry-list-left');
+  rightArea.innerHTML = ''; leftArea.innerHTML = '';
+
+  for (let i = 0; i < 8; i++) {
+    const rec = allRecords[i];
+    const col = document.createElement('div');
+    col.className = 'entry-col';
+    if (rec) {
+      const nameText = rec.kaimyo || rec.zokumy || '（名前未入力）';
+      const isKaimyo = !!rec.kaimyo;
+      const labelText = rec.isMonthly ? '月命日' : (rec.kikiName || '祥月命日');
+      const labelClass = rec.isMonthly ? 'monthly' : 'shotsuki';
+      // 戒名あり→俗名をサブ表示、戒名なし→俗名をメイン表示
+      const subName  = (isKaimyo && rec.zokumy) ? arabicToKanji(rec.zokumy) : '';
+      const ageText  = rec.age  ? arabicToKanji(rec.age)  : '';
+      // 備考は改行ごとに<span>で分割
+      const noteHTML = rec.note
+        ? rec.note.split('\n').filter(l=>l.trim())
+            .map(l=>`<span>${arabicToKanji(l)}</span>`).join('')
+        : '';
+      // 下ブロック（享年・備考）があるときだけ表示
+      const hasBottom = ageText || noteHTML;
+      col.innerHTML = `
+        <div class="col-top">
+          <span class="col-label ${labelClass}">${arabicToKanji(labelText)}</span>
+          <div class="col-kaimyo ${isKaimyo?'is-kaimyo':''}">${arabicToKanji(nameText)}</div>
+          ${subName ? `<div class="col-sub">${subName}</div>` : ''}
+        </div>
+        ${hasBottom ? `
+        <div class="col-bottom">
+          ${ageText  ? `<div class="col-age">${ageText}</div>`   : ''}
+          ${noteHTML ? `<div class="col-note">${noteHTML}</div>` : ''}
+        </div>` : ''}
+      `;
+      const origMonth = rec.isMonthly ? rec.origMonth : currentMonth;
+      col.onclick = () => openEditModal(rec.id, origMonth);
+    } else {
+      col.innerHTML = '<div style="opacity:0.07;margin:auto;font-size:1.2rem;">＋</div>';
+      col.onclick = () => openAddModal();
+    }
+    if (i < 4) rightArea.appendChild(col);
+    else leftArea.appendChild(col);
+  }
+}
+
+// 行事編集
+function openEventModal() {
+  const key = `${currentMonth}-${currentDay}`;
+  const list = document.getElementById('event-edit-list');
+  list.innerHTML = (events[key] || []).map((ev, i) => `
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+      <span>● ${ev}</span>
+      <button onclick="removeEvent(${i})" style="color:red; background:none; border:none; cursor:pointer;">削除</button>
+    </div>
+  `).join('');
+  document.getElementById('event-modal').classList.remove('hidden');
+}
+function addEvent() {
+  const name = document.getElementById('new-event-name').value;
+  if (!name) return;
+  const key = `${currentMonth}-${currentDay}`;
+  if (!events[key]) events[key] = [];
+  events[key].push(name);
+  document.getElementById('new-event-name').value = '';
+  save(); render(); openEventModal();
+}
+function removeEvent(idx) {
+  const key = `${currentMonth}-${currentDay}`;
+  events[key].splice(idx, 1);
+  save(); render(); openEventModal();
+}
+
+// 記録編集
+function openAddModal() {
+  document.getElementById('em-id').value = '';
+  ['em-kaimyo','em-zokumy','em-age','em-deathyear','em-note'].forEach(i=>document.getElementById(i).value='');
+  document.getElementById('del-btn').classList.add('hidden');
+  document.getElementById('entry-modal').classList.remove('hidden');
+}
+function openEditModal(id, m) {
+  const key = `${m}-${currentDay}`;
+  const en = entries[key].find(e => e.id == id);
+  if (!en) return;
+  document.getElementById('em-id').value = id;
+  document.getElementById('em-kaimyo').value = en.kaimyo;
+  document.getElementById('em-zokumy').value = en.zokumy;
+  document.getElementById('em-age').value = en.age;
+  document.getElementById('em-deathyear').value = en.deathYear;
+  document.getElementById('em-note').value = en.note;
+  document.getElementById('del-btn').classList.remove('hidden');
+  document.getElementById('entry-modal').classList.remove('hidden');
+}
+function saveEntry() {
+  const id = document.getElementById('em-id').value;
+  const newData = {
+    kaimyo:    document.getElementById('em-kaimyo').value,
+    zokumy:    document.getElementById('em-zokumy').value,
+    age:       document.getElementById('em-age').value,
+    deathYear: document.getElementById('em-deathyear').value,
+    note:      document.getElementById('em-note').value,
+  };
+
+  if (id) {
+    // 編集：全キーを検索してIDが一致するエントリを上書き
+    let found = false;
+    Object.keys(entries).forEach(key => {
+      const idx = entries[key].findIndex(e => String(e.id) === String(id));
+      if (idx >= 0) {
+        entries[key][idx] = { ...entries[key][idx], ...newData };
+        found = true;
+      }
+    });
+    if (!found) {
+      // 万一見つからなければ当日に新規追加
+      const key = `${currentMonth}-${currentDay}`;
+      if (!entries[key]) entries[key] = [];
+      entries[key].push({ id: Date.now().toString(), ...newData });
+    }
+  } else {
+    // 新規追加：当日のキーに追加
+    const key = `${currentMonth}-${currentDay}`;
+    if (!entries[key]) entries[key] = [];
+    entries[key].push({ id: Date.now().toString(), ...newData });
+  }
+
+  save(); render(); closeModal('entry-modal'); showToast('保存しました');
+}
+function deleteEntry() {
+  if (!confirm('削除しますか？')) return;
+  const id = document.getElementById('em-id').value;
+  // 全キーを検索してIDが一致するエントリを削除
+  let deleted = false;
+  Object.keys(entries).forEach(k => {
+    const before = entries[k].length;
+    entries[k] = entries[k].filter(e => String(e.id) !== String(id));
+    if (entries[k].length < before) deleted = true;
+    if (!entries[k].length) delete entries[k];
+  });
+  if (deleted) { save(); render(); closeModal('entry-modal'); showToast('削除しました'); }
+}
+
+// 基本操作
+function changeDay(delta) {
+  let d = new Date(2024, currentMonth - 1, currentDay + delta);
+  currentMonth = d.getMonth() + 1;
+  currentDay = d.getDate();
+  render();
+}
+function jumpToDate() {
+  const m = parseInt(document.getElementById('jump-month').value);
+  const d = parseInt(document.getElementById('jump-day').value);
+  if (m >= 1 && m <= 12 && d >= 1 && d <= 31) {
+    currentMonth = m; currentDay = d; render();
+  } else { showToast("日付が正しくありません"); }
+}
+function openListModal() {
+  const con = document.getElementById('list-container'); con.innerHTML = '';
+  Object.keys(entries).sort().forEach(k => {
+    const [m, d] = k.split('-').map(Number);
+    entries[k].forEach(e => {
+      const div = document.createElement('div');
+      div.style.cssText = 'padding:10px; border-bottom:1px solid #ddd; cursor:pointer;';
+      div.innerHTML = `<strong>${arabicToKanji(m+"月"+d+"日")}</strong> ${e.kaimyo || e.zokumy}`;
+      div.onclick = () => { currentMonth = m; currentDay = d; render(); closeModal('list-modal'); };
+      con.appendChild(div);
+    });
+  });
+  document.getElementById('list-modal').classList.remove('hidden');
+}
+
+// 背景・設定
+// ---- IndexedDB 背景保存 ----
+const BG_DB_NAME = 'kakocho_bg_db';
+const BG_DB_VER  = 1;
+const BG_STORE   = 'bg';
+
+function openBgDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(BG_DB_NAME, BG_DB_VER);
+    req.onupgradeneeded = e => e.target.result.createObjectStore(BG_STORE);
+    req.onsuccess = e => resolve(e.target.result);
+    req.onerror   = e => reject(e);
+  });
+}
+async function saveBgToDB(dataUrl) {
+  const db = await openBgDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(BG_STORE, 'readwrite');
+    tx.objectStore(BG_STORE).put(dataUrl, 'current');
+    tx.oncomplete = resolve;
+    tx.onerror    = reject;
+  });
+}
+async function loadBgFromDB() {
+  const db = await openBgDB();
+  return new Promise((resolve) => {
+    const tx  = db.transaction(BG_STORE, 'readonly');
+    const req = tx.objectStore(BG_STORE).get('current');
+    req.onsuccess = e => resolve(e.target.result || '');
+    req.onerror   = () => resolve('');
+  });
+}
+async function deleteBgFromDB() {
+  const db = await openBgDB();
+  return new Promise((resolve) => {
+    const tx = db.transaction(BG_STORE, 'readwrite');
+    tx.objectStore(BG_STORE).delete('current');
+    tx.oncomplete = resolve;
+  });
+}
+
+function handleBgUpload(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async (ev) => {
+    bgDataUrl = ev.target.result;
+    applyBg(bgDataUrl);
+    await saveBgToDB(bgDataUrl);
+    save(); // 通常データも保存（bgDataUrlは除く）
+    showToast('背景を設定しました（永続保存）');
+    e.target.value = ''; // 同じファイル再選択できるようリセット
+  };
+  reader.readAsDataURL(file);
+}
+function applyBg(url) {
+  const el = document.getElementById('bg-layer');
+  if (!url) {
+    el.style.backgroundImage = '';
+    el.style.background = '';
+    return;
+  }
+  if (url.startsWith('__color__')) {
+    // カラープリセット
+    el.style.backgroundImage = '';
+    el.style.background = url.replace('__color__', '');
+  } else {
+    // 画像
+    el.style.background = '';
+    el.style.backgroundImage = `url(${url})`;
+    el.style.backgroundSize = 'cover';
+    el.style.backgroundPosition = 'center';
+  }
+}
+async function clearBg() {
+  bgDataUrl = '';
+  applyBg('');
+  await deleteBgFromDB();
+  save();
+  showToast('背景を削除しました');
+}
+function saveSettings() {
+  settings.familyName = (document.getElementById('st-family').value || '').trim() || '○○';
+  settings.daimoku    = (document.getElementById('st-daimoku').value || '').trim() || '南無妙法蓮華経';
+  document.getElementById('spine-text').textContent = settings.daimoku;
+  document.getElementById('cover-family-name').textContent = settings.familyName + '家';
+  save();
+  closeModal('settings-modal');
+  showToast('設定を保存しました');
+}
+
+// キーボード操作（矢印キー＋テンキー(4=左,6=右)）
+document.addEventListener('keydown', e => {
+  const tag = document.activeElement.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+  if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp'   || e.key === '4') changeDay(-1);
+  if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === '6') changeDay(1);
+});
+
+function removeDuplicates() {
+  let removed = 0;
+  Object.keys(entries).forEach(key => {
+    const seen = new Set();
+    const before = entries[key].length;
+    entries[key] = entries[key].filter(e => {
+      const sig = (e.kaimyo||'') + '||' + (e.zokumy||'');
+      if (seen.has(sig)) { return false; }
+      seen.add(sig); return true;
+    });
+    removed += before - entries[key].length;
+    if (!entries[key].length) delete entries[key];
+  });
+  save(); render();
+  showToast(removed > 0 ? removed + '件の重複を削除しました' : '重複はありませんでした');
+}
+
+function exportCSV() {
+  let csv = "\uFEFF月,日,戒名,俗名,享年,没年,備考\n";
+  for (let k in entries) {
+    const [m, d] = k.split('-');
+    entries[k].forEach(e => { csv += `${m},${d},"${e.kaimyo}","${e.zokumy}","${e.age}","${e.deathYear}","${e.note}"\n`; });
+  }
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `過去帳_${settings.familyName}.csv`; a.click();
+}
+function parseCSVLine(line) {
+  const r=[]; let cur='', inQ=false;
+  for (let i=0;i<line.length;i++) {
+    const ch=line[i];
+    if (ch==='"') { if(inQ&&line[i+1]==='"'){cur+='"';i++;}else inQ=!inQ; }
+    else if (ch===','&&!inQ) { r.push(cur.trim()); cur=''; }
+    else cur+=ch;
+  }
+  r.push(cur.trim()); return r;
+}
+function importCSV(evt) {
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const lines = e.target.result.replace(/\r/g,'').split('\n').slice(1).filter(l=>l.trim());
+    let count = 0;
+    lines.forEach(l => {
+      const cols = parseCSVLine(l);
+      if (cols.length < 2) return;
+      const key = `${cols[0]}-${cols[1]}`;
+      if (!entries[key]) entries[key] = [];
+      // 重複チェック（同じ戒名＋俗名が既にあればスキップ）
+      const kaimyo = cols[2]||'', zokumy = cols[3]||'';
+      const isDup = entries[key].some(e =>
+        e.kaimyo === kaimyo && e.zokumy === zokumy
+      );
+      if (!isDup) {
+        entries[key].push({ id: Date.now()+Math.random(), kaimyo, zokumy, age:cols[4]||'', deathYear:cols[5]||'', note:cols[6]||'' });
+        count++;
+      }
+    });
+    save(); render(); showToast(count+'件読み込みました');
+    evt.target.value='';
+  };
+  reader.readAsText(evt.target.files[0], 'UTF-8');
+}
+
+function showCover() { document.getElementById('cover-screen').classList.remove('hidden'); }
+function closeCover() { document.getElementById('cover-screen').classList.add('hidden'); }
+function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+// カラープリセット定義
+const BG_COLOR_PRESETS = [
+  { label:'漆黒',  style:'linear-gradient(135deg,#0d0a06,#1a1208)' },
+  { label:'夜桜',  style:'linear-gradient(135deg,#12080f,#1f0f1a)' },
+  { label:'枯山水', style:'linear-gradient(180deg,#1a1610,#2a2318)' },
+  { label:'深緑',  style:'linear-gradient(135deg,#081008,#0f1f10)' },
+  { label:'深海',  style:'linear-gradient(180deg,#060f1a,#0a1a2a)' },
+  { label:'木目',  style:'linear-gradient(135deg,#1a1008,#2a1e10)' },
+  { label:'朱',    style:'linear-gradient(135deg,#1a0808,#2a1010)' },
+  { label:'石墨',  style:'linear-gradient(135deg,#111010,#1e1c1a)' },
+];
+
+function openBgPanel() {
+  // プレビュー更新
+  const preview = document.getElementById('bg-preview');
+  if (bgDataUrl) {
+    if (bgDataUrl.startsWith('__color__')) {
+      preview.style.background = bgDataUrl.replace('__color__','');
+      preview.textContent = '';
+    } else {
+      preview.style.backgroundImage = `url(${bgDataUrl})`;
+      preview.style.backgroundSize = 'cover';
+      preview.textContent = '';
+    }
+  } else {
+    preview.style.backgroundImage = '';
+    preview.style.background = '#e8dcc8';
+    preview.textContent = '背景なし';
+  }
+
+  // カラープリセット描画
+  const grid = document.getElementById('color-presets');
+  grid.innerHTML = BG_COLOR_PRESETS.map((p,i) => `
+    <div onclick="applyColorPreset(${i})" style="
+      aspect-ratio:1; border-radius:4px; cursor:pointer;
+      background:${p.style}; display:flex; align-items:center; justify-content:center;
+      color:rgba(255,255,255,0.7); font-size:0.6rem; letter-spacing:0.05em;
+      border:2px solid transparent; transition:border-color 0.2s;
+    " onmouseover="this.style.borderColor='#c9a84c'"
+       onmouseout="this.style.borderColor='transparent'">${p.label}</div>
+  `).join('');
+
+  document.getElementById('bg-panel').classList.remove('hidden');
+}
+
+async function applyColorPreset(idx) {
+  const style = BG_COLOR_PRESETS[idx].style;
+  bgDataUrl = '__color__' + style;
+  // bg-layerに適用
+  const el = document.getElementById('bg-layer');
+  el.style.backgroundImage = '';
+  el.style.background = style;
+  // IndexedDBに保存
+  await saveBgToDB(bgDataUrl);
+  save();
+  // パネルのプレビュー更新
+  openBgPanel();
+  showToast(BG_COLOR_PRESETS[idx].label + 'を設定しました');
+}
+function openSettingsModal() { document.getElementById('settings-modal').classList.remove('hidden'); }
+function showToast(m) { const t=document.getElementById('toast'); t.textContent=m; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2000); }
+
+// キーボード操作（矢印キー＋テンキー(4=左,6=右)）
+document.addEventListener('keydown', e => {
+  const tag = document.activeElement.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+  if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp'   || e.key === '4') changeDay(-1);
+  if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === '6') changeDay(1);
+});
+
+// タッチスワイプでページ移動（スマホ・タブレット対応）
+(function() {
+  let tx = 0, ty = 0;
+  const book = document.getElementById('page-book');
+  book.addEventListener('touchstart', e => {
+    tx = e.touches[0].clientX;
+    ty = e.touches[0].clientY;
+  }, { passive: true });
+  book.addEventListener('touchend', e => {
+    const dx = e.changedTouches[0].clientX - tx;
+    const dy = e.changedTouches[0].clientY - ty;
+    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 45) {
+      dx < 0 ? changeDay(1) : changeDay(-1);
+    }
+  }, { passive: true });
+})();
+
+load();
+</script>
+</body>
+</html>
