@@ -1,4 +1,3 @@
-[README.md](https://github.com/user-attachments/files/26108395/README.md)
 # 📖 デジタル過去帳アプリ
 
 > 仏壇の前にスマホ・タブレットを置いて、毎日の回向に使える  
